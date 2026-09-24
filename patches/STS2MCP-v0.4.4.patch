@@ -1,0 +1,574 @@
+diff --git a/McpMod.Actions.cs b/McpMod.Actions.cs
+index 2553f3f..20d28e1 100644
+--- a/McpMod.Actions.cs
++++ b/McpMod.Actions.cs
+@@ -69,6 +69,8 @@ public static partial class McpMod
+             "advance_dialogue" => ExecuteAdvanceDialogue(),
+             "choose_rest_option" => ExecuteChooseRestOption(data),
+             "shop_purchase" => ExecuteShopPurchase(player, data),
++            "close_shop_inventory" => ExecuteCloseShopInventory(),
++            "open_treasure_chest" => ExecuteOpenTreasureChest(),
+             "claim_reward" => ExecuteClaimReward(data),
+             "select_card_reward" => ExecuteSelectCardReward(data),
+             "skip_card_reward" => ExecuteSkipCardReward(),
+@@ -558,37 +560,25 @@ public static partial class McpMod
+             return new Dictionary<string, object?> { ["status"] = "ok", ["message"] = "Proceeding from rest site" };
+         }
+ 
+-        // Try merchant - close inventory first if open, then proceed
++        // Shop inventory close and shop proceed are separate actions.
+         if (NMerchantRoom.Instance is { } merchRoom)
+         {
+-            if (merchRoom.Inventory?.IsOpen == true)
+-            {
+-                var backBtn = FindFirst<NBackButton>(merchRoom);
+-                if (backBtn is { IsEnabled: true })
+-                    backBtn.ForceClick();
+-            }
+-            if (merchRoom.ProceedButton.IsEnabled)
++            if (merchRoom.Inventory?.IsOpen != true && merchRoom.ProceedButton.IsEnabled)
+             {
+                 merchRoom.ProceedButton.ForceClick();
+                 return new Dictionary<string, object?> { ["status"] = "ok", ["message"] = "Proceeding from shop" };
+             }
+         }
+ 
+-        // Try fake merchant - close inventory first if open, then proceed
++        // Fake merchant close and proceed are separate actions too.
+         if (NEventRoom.Instance is { } evtRoom)
+         {
+             var fmNode = FindFirst<NFakeMerchant>(evtRoom);
+             if (fmNode != null)
+             {
+                 var fmInventory = FindFirst<NMerchantInventory>(fmNode);
+-                if (fmInventory is { IsOpen: true })
+-                {
+-                    var backBtn = FindFirst<NBackButton>(fmNode);
+-                    if (backBtn is { IsEnabled: true })
+-                        backBtn.ForceClick();
+-                }
+                 var proceedBtn = FindFirst<NProceedButton>(fmNode);
+-                if (proceedBtn is { IsEnabled: true })
++                if (fmInventory?.IsOpen != true && proceedBtn is { IsEnabled: true })
+                 {
+                     proceedBtn.ForceClick();
+                     return new Dictionary<string, object?> { ["status"] = "ok", ["message"] = "Proceeding from fake merchant" };
+@@ -599,15 +589,81 @@ public static partial class McpMod
+         // Try treasure room
+         var treasureUI = FindFirst<NTreasureRoom>(
+             ((Godot.SceneTree)Godot.Engine.GetMainLoop()).Root);
+-        if (treasureUI != null && treasureUI.ProceedButton.IsEnabled)
++        var treasureProceedButton = treasureUI?.ProceedButton;
++        if (treasureProceedButton is { IsEnabled: true } && treasureProceedButton.IsVisibleInTree())
+         {
+-            treasureUI.ProceedButton.ForceClick();
++            treasureProceedButton.ForceClick();
+             return new Dictionary<string, object?> { ["status"] = "ok", ["message"] = "Proceeding from treasure room" };
+         }
+ 
+         return Error("No proceed button available or enabled");
+     }
+ 
++    private static Dictionary<string, object?> ExecuteCloseShopInventory()
++    {
++        if (NMerchantRoom.Instance is { } merchantRoom && merchantRoom.Inventory?.IsOpen == true)
++        {
++            var backButton = FindFirst<NBackButton>(merchantRoom);
++            if (backButton is { IsEnabled: true } && backButton.IsVisibleInTree())
++            {
++                backButton.ForceClick();
++                return new Dictionary<string, object?>
++                {
++                    ["status"] = "ok",
++                    ["message"] = "Closing shop inventory",
++                    ["control_path"] = backButton.GetPath().ToString()
++                };
++            }
++            return Error("Shop inventory is open, but its close control is unavailable");
++        }
++
++        if (NEventRoom.Instance is { } eventRoom)
++        {
++            var fakeMerchant = FindFirst<NFakeMerchant>(eventRoom);
++            if (fakeMerchant != null && FindFirst<NMerchantInventory>(fakeMerchant) is { IsOpen: true })
++            {
++                var backButton = FindFirst<NBackButton>(fakeMerchant);
++                if (backButton is { IsEnabled: true } && backButton.IsVisibleInTree())
++                {
++                    backButton.ForceClick();
++                    return new Dictionary<string, object?>
++                    {
++                        ["status"] = "ok",
++                        ["message"] = "Closing fake merchant inventory",
++                        ["control_path"] = backButton.GetPath().ToString()
++                    };
++                }
++                return Error("Fake merchant inventory is open, but its close control is unavailable");
++            }
++        }
++
++        return Error("No open shop inventory is available to close");
++    }
++
++    private static Dictionary<string, object?> ExecuteOpenTreasureChest()
++    {
++        var treasureRoom = FindFirst<NTreasureRoom>(
++            ((Godot.SceneTree)Godot.Engine.GetMainLoop()).Root);
++        if (treasureRoom == null)
++            return Error("Treasure room is not open");
++
++        var relicCollection = treasureRoom.GetNodeOrNull<NTreasureRoomRelicCollection>("%RelicCollection");
++        if (relicCollection?.IsVisibleInTree() == true)
++            return Error("Treasure chest is already open");
++
++        var chestButton = treasureRoom.GetNodeOrNull<NClickableControl>("Chest");
++        if (chestButton is not { IsEnabled: true } || !chestButton.IsVisibleInTree())
++            return Error("Treasure chest control is not visible and enabled");
++
++        chestButton.ForceClick();
++        return new Dictionary<string, object?>
++        {
++            ["status"] = "ok",
++            ["message"] = "Opening treasure chest",
++            ["control_path"] = chestButton.GetPath().ToString()
++        };
++    }
++
+     private static Dictionary<string, object?> ExecuteSelectCard(Dictionary<string, JsonElement> data)
+     {
+         var overlay = NOverlayStack.Instance?.Peek();
+@@ -665,58 +721,49 @@ public static partial class McpMod
+         if (overlay is not NCardGridSelectionScreen screen)
+             return Error("No card selection screen is open");
+ 
+-        // Check all preview containers (upgrade uses UpgradeSinglePreviewContainer / UpgradeMultiPreviewContainer,
+-        // NDeckCardSelectScreen uses PreviewContainer with %PreviewConfirm)
+-        foreach (var containerName in new[] { "%UpgradeSinglePreviewContainer", "%UpgradeMultiPreviewContainer", "%PreviewContainer" })
++        var confirm = FindCardSelectionConfirmButton(screen);
++        if (confirm == null)
++            return Error("No visible, enabled confirm button was found - select cards or wait for the screen to finish loading");
++
++        var controlInfo = ConfirmButtonInfo(confirm);
++        if (screen is NDeckEnchantSelectScreen enchantScreen)
+         {
+-            var container = screen.GetNodeOrNull<Godot.Control>(containerName);
+-            if (container?.Visible == true)
++            // ForceClick reports success on NDeckEnchantSelectScreen but does not run the
++            // screen's selection logic (STS2MCP issue #118). Invoke the same screen handler
++            // that the enabled checkmark button is wired to, passing the validated button.
++            var handler = typeof(NDeckEnchantSelectScreen).GetMethod(
++                "ConfirmSelection",
++                System.Reflection.BindingFlags.Instance |
++                System.Reflection.BindingFlags.NonPublic |
++                System.Reflection.BindingFlags.DeclaredOnly);
++            if (handler == null)
++                return Error("NDeckEnchantSelectScreen confirmation handler was not found; no click was sent");
++            try
+             {
+-                var confirm = container.GetNodeOrNull<NConfirmButton>("Confirm")
+-                              ?? container.GetNodeOrNull<NConfirmButton>("%PreviewConfirm");
+-                if (confirm is { IsEnabled: true })
+-                {
+-                    confirm.ForceClick();
+-                    return new Dictionary<string, object?>
+-                    {
+-                        ["status"] = "ok",
+-                        ["message"] = "Confirming selection from preview"
+-                    };
+-                }
++                handler.Invoke(enchantScreen, new object?[] { confirm });
++            }
++            catch (System.Reflection.TargetInvocationException ex)
++            {
++                return Error($"NDeckEnchantSelectScreen confirmation handler failed: {ex.InnerException?.Message ?? ex.Message}");
+             }
+-        }
+ 
+-        // Try main confirm button
+-        var mainConfirm = screen.GetNodeOrNull<NConfirmButton>("Confirm")
+-                          ?? screen.GetNodeOrNull<NConfirmButton>("%Confirm");
+-        if (mainConfirm is { IsEnabled: true })
+-        {
+-            mainConfirm.ForceClick();
+             return new Dictionary<string, object?>
+             {
+                 ["status"] = "ok",
+-                ["message"] = "Confirming selection"
++                ["message"] = "Invoked the NDeckEnchantSelectScreen confirmation handler; game-state advancement must be verified separately",
++                ["confirm_control"] = controlInfo,
++                ["click_method"] = "NDeckEnchantSelectScreen.ConfirmSelection(NButton)"
+             };
+         }
+ 
+-        // Fallback: find ANY enabled NConfirmButton in the screen tree.
+-        // Covers NCardGridSelectionScreen subclasses (like NDeckEnchantSelectScreen)
+-        // whose confirm button isn't in any of the known container paths above.
+-        var allConfirmButtons = FindAll<NConfirmButton>(screen);
+-        foreach (var btn in allConfirmButtons)
++        confirm.ForceClick();
++        return new Dictionary<string, object?>
+         {
+-            if (btn.IsEnabled && btn.IsVisibleInTree())
+-            {
+-                btn.ForceClick();
+-                return new Dictionary<string, object?>
+-                {
+-                    ["status"] = "ok",
+-                    ["message"] = "Confirming selection"
+-                };
+-            }
+-        }
+-
+-        return Error("No confirm button is currently enabled - select more cards first");
++            ["status"] = "ok",
++            ["message"] = "Sent ForceClick to the visible selection confirm button; game-state advancement must be verified separately",
++            ["confirm_control"] = controlInfo,
++            ["click_method"] = "NConfirmButton.ForceClick"
++        };
+     }
+ 
+     private static Dictionary<string, object?> ExecuteCancelSelection()
+diff --git a/McpMod.MultiplayerState.cs b/McpMod.MultiplayerState.cs
+index cdbd318..b66c07c 100644
+--- a/McpMod.MultiplayerState.cs
++++ b/McpMod.MultiplayerState.cs
+@@ -26,7 +26,10 @@ public static partial class McpMod
+ {
+     private static Dictionary<string, object?> BuildMultiplayerGameState()
+     {
+-        var result = new Dictionary<string, object?>();
++        var result = new Dictionary<string, object?>
++        {
++            ["bridge_schema_version"] = BridgeSchemaVersion
++        };
+         var tree = Engine.GetMainLoop() as SceneTree;
+ 
+         // Surface blocking FTUE/tutorial/popup prompts before normal run state, so MP
+@@ -37,7 +40,10 @@ public static partial class McpMod
+         {
+             var ftueState = BuildVisibleFtueState(tree.Root);
+             if (ftueState != null)
++            {
++                ftueState["bridge_schema_version"] = BridgeSchemaVersion;
+                 return ftueState;
++            }
+         }
+ 
+         if (!RunManager.Instance.IsInProgress)
+@@ -193,12 +199,6 @@ public static partial class McpMod
+             }
+             else
+             {
+-                var merchUI = NMerchantRoom.Instance;
+-                if (merchUI?.Inventory != null && !merchUI.Inventory.IsOpen)
+-                {
+-                    merchUI.OpenInventory();
+-                }
+-
+                 result["state_type"] = "shop";
+                 result["shop"] = BuildShopState(merchantRoom, runState);
+             }
+diff --git a/McpMod.StateBuilder.cs b/McpMod.StateBuilder.cs
+index 76eee84..492f157 100644
+--- a/McpMod.StateBuilder.cs
++++ b/McpMod.StateBuilder.cs
+@@ -60,14 +60,20 @@ public static partial class McpMod
+ {
+     private static Dictionary<string, object?> BuildGameState()
+     {
+-        var result = new Dictionary<string, object?>();
++        var result = new Dictionary<string, object?>
++        {
++            ["bridge_schema_version"] = BridgeSchemaVersion
++        };
+         var tree = (Godot.Engine.GetMainLoop()) as SceneTree;
+ 
+         if (tree?.Root != null)
+         {
+             var ftueState = BuildVisibleFtueState(tree.Root);
+             if (ftueState != null)
++            {
++                ftueState["bridge_schema_version"] = BridgeSchemaVersion;
+                 return ftueState;
++            }
+         }
+ 
+         if (!RunManager.Instance.IsInProgress)
+@@ -545,14 +551,6 @@ public static partial class McpMod
+             }
+             else
+             {
+-                // Auto-open the shopkeeper's inventory if not already open.
+-                // NMerchantRoom.Inventory (UI node) can be null before the scene is fully ready;
+-                // OpenInventory() itself accesses Inventory.IsOpen, so guard against null.
+-                var merchUI = NMerchantRoom.Instance;
+-                if (merchUI?.Inventory != null && !merchUI.Inventory.IsOpen)
+-                {
+-                    merchUI.OpenInventory();
+-                }
+                 result["state_type"] = "shop";
+                 result["shop"] = BuildShopState(merchantRoom, runState);
+             }
+@@ -1100,6 +1098,19 @@ public static partial class McpMod
+         state["max_hp"] = creature.MaxHp;
+         state["block"] = creature.Block;
+ 
++        // Strategic Luna card rewards need the complete current deck, including
++        // card identity and upgrade state. This is read-only game data; combat
++        // providers receive a separately restricted tactical context.
++        var deck = new List<Dictionary<string, object?>>();
++        int deckIndex = 0;
++        foreach (var card in player.Deck.Cards)
++        {
++            var cardInfo = BuildCardInfo(card);
++            cardInfo["index"] = deckIndex++;
++            deck.Add(cardInfo);
++        }
++        state["deck"] = deck;
++
+         // PlayerCombatState can linger after combat while on map/rest/shop. Energy/MaxEnergy getters
+         // run hooks (e.g. Hook.ModifyMaxEnergy) that null-ref without a live combat - only serialize
+         // combat fields when a fight is actually in progress.
+@@ -1456,37 +1467,31 @@ public static partial class McpMod
+             state["shop"] = new Dictionary<string, object?>
+             {
+                 ["items"] = new List<Dictionary<string, object?>>(),
++                ["inventory_open"] = false,
++                ["can_close_inventory"] = false,
+                 ["can_proceed"] = true
+             };
+             state["message"] = "The fake merchant has been defeated. Proceed to map.";
+             return state;
+         }
+ 
+-        // Auto-open the inventory if the merchant button is still available
+-        if (fakeMerchantNode != null)
+-        {
+-            var inventoryUI = FindFirst<NMerchantInventory>(fakeMerchantNode);
+-            if (inventoryUI != null && !inventoryUI.IsOpen)
+-            {
+-                // ForceClick the merchant button to go through the proper signal chain
+-                // (disables proceed button, wires InventoryClosed callback, etc.)
+-                var merchantButton = fakeMerchantNode.MerchantButton;
+-                if (merchantButton != null && merchantButton.Visible && merchantButton.IsEnabled)
+-                    merchantButton.ForceClick();
+-            }
+-        }
+-
+         // Build shop inventory from the FakeMerchant model
+         var shopState = BuildFakeMerchantShopItems(fakeMerchant.Inventory);
+ 
+-        // Proceed button
++        // Read the merchant controls without opening the inventory.
+         if (fakeMerchantNode != null)
+         {
++            var inventoryUI = FindFirst<NMerchantInventory>(fakeMerchantNode);
++            var backButton = FindFirst<NBackButton>(fakeMerchantNode);
+             var proceedButton = FindFirst<NProceedButton>(fakeMerchantNode);
++            shopState["inventory_open"] = inventoryUI?.IsOpen;
++            shopState["can_close_inventory"] = inventoryUI?.IsOpen == true
++                && backButton is { IsEnabled: true } && backButton.IsVisibleInTree();
+             shopState["can_proceed"] = proceedButton?.IsEnabled ?? false;
+         }
+         else
+         {
++            shopState["can_close_inventory"] = false;
+             shopState["can_proceed"] = false;
+         }
+ 
+@@ -1563,12 +1568,18 @@ public static partial class McpMod
+     private static Dictionary<string, object?> BuildShopState(MerchantRoom merchantRoom, RunState runState)
+     {
+         var state = new Dictionary<string, object?>();
++        var merchantUI = NMerchantRoom.Instance;
++        var inventoryUI = merchantUI?.Inventory;
++        var backButton = merchantUI == null ? null : FindFirst<NBackButton>(merchantUI);
++        state["inventory_open"] = inventoryUI?.IsOpen;
++        state["can_close_inventory"] = inventoryUI?.IsOpen == true
++            && backButton is { IsEnabled: true } && backButton.IsVisibleInTree();
++        state["can_proceed"] = merchantUI?.ProceedButton?.IsEnabled ?? false;
+ 
+         var inventory = merchantRoom.GetLocalInventory();
+         if (inventory == null)
+         {
+             state["items"] = new List<Dictionary<string, object?>>();
+-            state["can_proceed"] = NMerchantRoom.Instance?.ProceedButton?.IsEnabled ?? false;
+             state["error"] =
+                 "Shop inventory is not ready yet (null). Often happens right after entering the merchant from the map; retry in a moment.";
+             return state;
+@@ -1664,9 +1675,6 @@ public static partial class McpMod
+ 
+         state["items"] = items;
+ 
+-        var proceedButton = NMerchantRoom.Instance?.ProceedButton;
+-        state["can_proceed"] = proceedButton?.IsEnabled ?? false;
+-
+         return state;
+     }
+ 
+@@ -1966,32 +1974,51 @@ public static partial class McpMod
+         }
+         state["can_cancel"] = canCancel;
+ 
+-        // Confirm button - search all preview containers and main screen
+-        bool canConfirm = false;
+-        foreach (var container in new[] { previewSingle, previewMulti, previewGeneric })
+-        {
+-            if (container?.Visible == true)
+-            {
+-                var confirm = container.GetNodeOrNull<NConfirmButton>("Confirm")
+-                              ?? container.GetNodeOrNull<NConfirmButton>("%PreviewConfirm");
+-                if (confirm?.IsEnabled == true) { canConfirm = true; break; }
+-            }
+-        }
+-        if (!canConfirm)
+-        {
+-            var mainConfirm = screen.GetNodeOrNull<NConfirmButton>("Confirm")
+-                              ?? screen.GetNodeOrNull<NConfirmButton>("%Confirm");
+-            if (mainConfirm?.IsEnabled == true) canConfirm = true;
+-        }
+-        // Fallback: search entire screen tree for any enabled confirm button
+-        // (covers subclasses like NDeckEnchantSelectScreen)
+-        if (!canConfirm)
++        // Use the exact same visible control lookup as the action handler so the
++        // advertised legal action corresponds to a concrete UI button.
++        var confirmButton = FindCardSelectionConfirmButton(screen);
++        state["can_confirm"] = confirmButton != null;
++        state["confirm_button"] = ConfirmButtonInfo(confirmButton);
++
++        return state;
++    }
++
++    private static NConfirmButton? FindCardSelectionConfirmButton(NCardGridSelectionScreen screen)
++    {
++        foreach (var containerName in new[] { "%UpgradeSinglePreviewContainer", "%UpgradeMultiPreviewContainer", "%PreviewContainer" })
+         {
+-            canConfirm = FindAll<NConfirmButton>(screen).Any(b => b.IsEnabled && b.IsVisibleInTree());
++            var container = screen.GetNodeOrNull<Godot.Control>(containerName);
++            if (container?.Visible != true) continue;
++            var confirm = container.GetNodeOrNull<NConfirmButton>("Confirm")
++                          ?? container.GetNodeOrNull<NConfirmButton>("%PreviewConfirm");
++            if (confirm is { IsEnabled: true } && confirm.IsVisibleInTree())
++                return confirm;
+         }
+-        state["can_confirm"] = canConfirm;
+ 
+-        return state;
++        var mainConfirm = screen.GetNodeOrNull<NConfirmButton>("Confirm")
++                          ?? screen.GetNodeOrNull<NConfirmButton>("%Confirm");
++        if (mainConfirm is { IsEnabled: true } && mainConfirm.IsVisibleInTree())
++            return mainConfirm;
++
++        return FindAll<NConfirmButton>(screen)
++            .FirstOrDefault(button => button.IsEnabled && button.IsVisibleInTree());
++    }
++
++    private static Dictionary<string, object?> ConfirmButtonInfo(NConfirmButton? button)
++    {
++        if (button == null)
++            return new Dictionary<string, object?> { ["present"] = false };
++
++        var center = button.GlobalPosition + button.Size * 0.5f;
++        return new Dictionary<string, object?>
++        {
++            ["present"] = true,
++            ["node_path"] = button.GetPath().ToString(),
++            ["visible"] = button.IsVisibleInTree(),
++            ["enabled"] = button.IsEnabled,
++            ["global_center"] = new Dictionary<string, float> { ["x"] = center.X, ["y"] = center.Y },
++            ["size"] = new Dictionary<string, float> { ["x"] = button.Size.X, ["y"] = button.Size.Y }
++        };
+     }
+ 
+     private static Dictionary<string, object?> BuildChooseCardState(NChooseACardSelectionScreen screen, RunState runState)
+@@ -2299,24 +2326,24 @@ public static partial class McpMod
+             return state;
+         }
+ 
+-        // Auto-open chest if not yet opened
+         var chestButton = treasureUI.GetNodeOrNull<NClickableControl>("Chest");
+-        if (chestButton is { IsEnabled: true })
+-        {
+-            chestButton.ForceClick();
+-            state["message"] = "Opening chest...";
+-            return state;
+-        }
++        state["can_open_chest"] = chestButton is { IsEnabled: true }
++            && chestButton.IsVisibleInTree();
+ 
+         // Show relics available for picking
+         var relicCollection = treasureUI.GetNodeOrNull<NTreasureRoomRelicCollection>("%RelicCollection");
+-        if (relicCollection?.Visible == true)
++        bool chestOpen = relicCollection != null
++            && relicCollection.Visible
++            && relicCollection.IsVisibleInTree();
++        state["chest_open"] = chestOpen;
++        var relics = new List<Dictionary<string, object?>>();
++        state["relics"] = relics;
++        if (relicCollection != null && chestOpen)
+         {
+             var holders = FindAll<NTreasureRoomRelicHolder>(relicCollection)
+                 .Where(h => h.IsEnabled && h.Visible)
+                 .ToList();
+ 
+-            var relics = new List<Dictionary<string, object?>>();
+             int index = 0;
+             foreach (var holder in holders)
+             {
+@@ -2333,10 +2360,13 @@ public static partial class McpMod
+                 });
+                 index++;
+             }
+-            state["relics"] = relics;
+         }
+ 
+-        state["can_proceed"] = treasureUI.ProceedButton?.IsEnabled ?? false;
++        var proceedButton = treasureUI.ProceedButton;
++        state["proceed_button_visible"] = proceedButton?.IsVisibleInTree() == true;
++        state["proceed_button_enabled"] = proceedButton?.IsEnabled == true;
++        state["can_proceed"] = proceedButton is { IsEnabled: true }
++            && proceedButton.IsVisibleInTree();
+ 
+         return state;
+     }
+diff --git a/McpMod.cs b/McpMod.cs
+index 3b5ed64..f46ce97 100644
+--- a/McpMod.cs
++++ b/McpMod.cs
+@@ -19,7 +19,8 @@ namespace STS2_MCP;
+ [ModInitializer("Initialize")]
+ public static partial class McpMod
+ {
+-    public const string Version = "0.4.0";
++    public const string Version = "0.4.4";
++    public const int BridgeSchemaVersion = 2;
+     public const int DefaultPort = 15526;
+     private const string ConfigFileName = "STS2_MCP.conf";
+ 
+@@ -193,7 +194,12 @@ public static partial class McpMod
+ 
+             if (path == "/")
+             {
+-                SendJson(response, new { message = $"Hello from STS2 MCP v{Version}", status = "ok" });
++                SendJson(response, new
++                {
++                    message = $"Hello from STS2 MCP v{Version}",
++                    status = "ok",
++                    bridge_schema_version = BridgeSchemaVersion
++                });
+             }
+             else if (path == "/api/v1/singleplayer")
+             {
+diff --git a/mod_manifest.json b/mod_manifest.json
+index 638fb98..19b99d5 100644
+--- a/mod_manifest.json
++++ b/mod_manifest.json
+@@ -3,7 +3,7 @@
+   "name": "STS2 MCP",
+   "author": "kunology",
+   "description": "MCP server bridge for Slay the Spire 2",
+-  "version": "0.4.0",
++  "version": "0.4.4",
+   "has_pck": false,
+   "has_dll": true,
+   "affects_gameplay": false

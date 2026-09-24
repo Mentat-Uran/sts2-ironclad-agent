@@ -1,0 +1,27 @@
+[project]
+name = "sts2-ironclad-agent"
+version = "0.1.0"
+description = "A guarded Slay the Spire 2 MCP controller with Kev and GPT-6 Luna providers"
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.25.0,<1",
+  "mcp>=1.7.1,<2",
+]
+
+[project.scripts]
+sts2-agent = "sts2_agent.cli:main"
+sts2-agent-mcp = "sts2_agent.mcp_server:main"
+sts2-agent-monitor = "sts2_agent.monitor:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+sts2_agent = ["web/*"]
+
+[tool.uv]
+package = true

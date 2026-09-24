@@ -1,0 +1,32 @@
+{
+  "state_type": "monster",
+  "run": {"act": 1, "floor": 2, "ascension": 0},
+  "player": {
+    "character": "The Ironclad",
+    "hp": 72,
+    "max_hp": 80,
+    "block": 0,
+    "gold": 55,
+    "energy": 3,
+    "max_energy": 3,
+    "hand": [
+      {"index": 0, "id": "BASH", "name": "Bash", "type": "Attack", "cost": "2", "description": "Deal 8 damage. Apply 2 Vulnerable.", "target_type": "AnyEnemy", "can_play": true, "unplayable_reason": null},
+      {"index": 1, "id": "STRIKE_R", "name": "Strike", "type": "Attack", "cost": "1", "description": "Deal 6 damage.", "target_type": "AnyEnemy", "can_play": true, "unplayable_reason": null},
+      {"index": 2, "id": "DEFEND_R", "name": "Defend", "type": "Skill", "cost": "1", "description": "Gain 5 Block.", "target_type": "None", "can_play": true, "unplayable_reason": null}
+    ],
+    "draw_pile_count": 7,
+    "discard_pile_count": 0,
+    "exhaust_pile_count": 0,
+    "status": [],
+    "relics": [{"id": "BURNING_BLOOD", "name": "Burning Blood", "description": "At the end of combat, heal 6 HP."}],
+    "potions": []
+  },
+  "battle": {
+    "round": 1,
+    "turn": "player",
+    "is_play_phase": true,
+    "enemies": [
+      {"entity_id": "JAW_WORM_0", "name": "Jaw Worm", "hp": 44, "max_hp": 44, "block": 0, "status": [], "intents": [{"type": "Attack", "label": "11", "description": "Deals 11 damage."}]}
+    ]
+  }
+}

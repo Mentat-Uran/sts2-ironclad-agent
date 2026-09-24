@@ -1,0 +1,28 @@
+[agent]
+provider_mode = "live" # Uses local KEV for tactical choices; Luna-required choices pause until configured.
+game_actions_enabled = false # Keep false while preserving existing Steam runs/saves.
+require_ironclad = true
+min_action_interval_ms = 450 # Human-like pacing floor; actual speed also includes model/API latency.
+
+[game]
+base_url = "http://127.0.0.1:15526"
+timeout_seconds = 5.0
+expected_game_version = "v0.107.1"
+game_dir = "" # Optional local path; set this to enable release_info.json version checks.
+
+[kev]
+base_url = "http://127.0.0.1:8009"
+model = "kev-latest"
+timeout_seconds = 60.0 # Gives large multi-enemy choices one longer wait without stacking requests that may still be running on the GPU.
+combat_min_confidence = 0.0 # Kev selectivity is not action-success probability; legal, well-formed choices can proceed when several plays are viable.
+permutation_average = false # Slow; requires the local exhaustive /permute capability and only supports 2-4 choices.
+
+[luna]
+base_url = "http://127.0.0.1:18317/v1" # Example only; set your own OpenAI-compatible endpoint.
+model = "gpt-6-luna"
+api_key_env = "STS2_LUNA_API_KEY"
+timeout_seconds = 25.0
+min_confidence = 0.60
+
+[safety]
+max_state_age_seconds = 8.0

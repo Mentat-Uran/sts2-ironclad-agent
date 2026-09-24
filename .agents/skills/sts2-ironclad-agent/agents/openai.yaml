@@ -1,0 +1,4 @@
+interface:
+  display_name: "STS2 Ironclad Agent"
+  short_description: "Ironclad play and agent routing for STS2"
+  default_prompt: "Use $sts2-ironclad-agent to evaluate this Ironclad game state."

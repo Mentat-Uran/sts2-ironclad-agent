@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111417">
+  <title>STS2 · Ironclad Control Room</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-nav" href="#main">跳到监控内容</a>
+  <div class="backdrop-grid" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Slay the Spire 2 铁甲战士监控">
+      <span class="brand-mark">S2</span>
+      <span><strong>SPIRE / OPS</strong><small>IRONCLAD TELEMETRY</small></span>
+    </a>
+    <div class="topbar-right">
+      <span class="live-indicator"><i></i><span id="connection-text" aria-live="polite">连接中</span></span>
+      <span class="sync-time mono" id="last-sync">--:--:--</span>
+      <button class="icon-button" id="refresh-now" type="button" aria-label="立即刷新" title="立即刷新">↻</button>
+    </div>
+  </header>
+
+  <main id="main" class="shell">
+    <section class="hero" aria-labelledby="page-title">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="eyebrow-line"></span>RUN TELEMETRY <span class="eyebrow-muted">/ LOCAL SESSION</span></div>
+        <h1 id="page-title">铁甲战士<span>行动台</span></h1>
+        <p>实时游戏状态 · 合法动作 · Provider 决策轨迹</p>
+      </div>
+      <div class="hero-screen">
+        <span class="screen-label">CURRENT SCREEN</span>
+        <strong id="screen-name">等待游戏数据</strong>
+        <div class="screen-meta"><span id="run-meta">ACT -- / FLOOR --</span><span id="version-meta">v—</span></div>
+      </div>
+      <div class="hero-stamp" aria-hidden="true"><span>STS</span><b>02</b></div>
+    </section>
+
+    <section class="provider-strip" aria-label="连接状态">
+      <article class="provider-status game-status" id="game-status-card">
+        <span class="status-kicker">GAME BRIDGE</span>
+        <div class="status-main"><span class="status-dot"></span><strong id="game-status">检查中</strong></div>
+        <small id="game-detail">127.0.0.1:15526</small>
+      </article>
+      <article class="provider-status kev-status" id="kev-status-card">
+        <span class="status-kicker">LOCAL TACTICAL MODEL</span>
+        <div class="status-main"><span class="status-dot"></span><strong>KEV <em id="kev-status">检查中</em></strong></div>
+        <small id="kev-detail">kev-latest · CUDA</small>
+      </article>
+      <article class="provider-status luna-status" id="luna-status-card">
+        <span class="status-kicker">STRATEGIC MODEL</span>
+        <div class="status-main"><span class="status-dot"></span><strong>GPT-6 Luna <em id="luna-status">检查中</em></strong></div>
+        <small id="luna-detail">局域网 Chat Completions</small>
+      </article>
+      <article class="provider-status action-mode" id="action-mode-card">
+        <span class="status-kicker">ACTION GATE</span>
+        <div class="status-main"><span class="gate-mark" id="gate-mark">—</span><strong id="action-mode">读取中</strong></div>
+        <small id="action-mode-detail">网页仅监控 · 当前实例配置</small>
+      </article>
+    </section>
+
+    <div class="dashboard-grid">
+      <section class="panel battle-panel" aria-labelledby="state-title">
+        <div class="panel-heading">
+          <div><span class="section-index">01 / LIVE STATE</span><h2 id="state-title">游戏现场</h2></div>
+          <span class="state-pill" id="state-health">同步中</span>
+        </div>
+        <div class="resource-grid" id="resources">
+          <div class="resource hp-resource"><span>生命</span><strong>— <small>/ —</small></strong><div class="meter"><i></i></div></div>
+          <div class="resource block-resource"><span>格挡</span><strong>—</strong><div class="meter"><i></i></div></div>
+          <div class="resource energy-resource"><span>能量</span><strong>— <small>/ —</small></strong><div class="meter"><i></i></div></div>
+          <div class="resource gold-resource"><span>金币</span><strong>—</strong><div class="meter"><i></i></div></div>
+        </div>
+        <div class="combat-board" id="combat-board">
+          <div class="empty-board"><span class="empty-sigil">◎</span><strong>等待战斗状态</strong><small>进入战斗后会显示敌人意图与生命值</small></div>
+        </div>
+        <div class="subheading"><span>当前手牌</span><small id="hand-count">0 CARDS</small></div>
+        <div class="hand-row" id="hand-row"><div class="empty-inline">当前屏幕没有可显示的手牌</div></div>
+        <div class="subheading legal-heading"><span>当前合法动作</span><small id="legal-count">0 ACTIONS</small></div>
+        <div class="legal-list" id="legal-list"><div class="empty-inline">尚无动作数据</div></div>
+        <div class="state-errors" id="state-errors" hidden></div>
+      </section>
+
+      <aside class="panel trace-panel" aria-labelledby="trace-title">
+        <div class="panel-heading">
+          <div><span class="section-index">02 / DECISION TRACE</span><h2 id="trace-title">Provider 操作记录</h2></div>
+          <div class="trace-tools"><span class="event-count mono" id="event-count">000</span><a class="log-download" id="run-log-download" href="/api/runs/latest" hidden>下载本局 JSON ↓</a></div>
+        </div>
+        <p class="panel-intro">展示模型收到的候选动作、选中结果与 MCP 提交回执。密钥和原始请求正文不会写入记录。</p>
+        <p class="run-log-meta" id="run-log-meta">本局记录：等待 Agent 开始决策</p>
+        <div class="trace-list" id="trace-list" aria-live="polite">
+          <div class="empty-trace"><span>◌</span><strong>还没有 Provider 事件</strong><small>模型决策会在这里按时间出现</small></div>
+        </div>
+      </aside>
+
+      <section class="panel map-panel" aria-labelledby="map-title">
+        <div class="panel-heading">
+          <div><span class="section-index">03 / ROUTE & INVENTORY</span><h2 id="map-title">地图与资源</h2></div>
+          <span class="route-owner">LUNA PLAN <b>→</b> DIRECT STEP</span>
+        </div>
+        <div id="map-summary" class="map-summary"><span class="map-glyph">⌁</span><div><strong>地图状态待机</strong><small>进入地图后显示可达节点与 Boss 方向</small></div></div>
+        <div class="map-options" id="map-options"></div>
+        <div class="inventory-row" id="inventory-row">
+          <div><span class="inventory-icon">✦</span><span><small>遗物</small><strong id="relic-count">—</strong></span></div>
+          <div><span class="inventory-icon potion-icon">◒</span><span><small>药水</small><strong id="potion-count">—</strong></span></div>
+          <div><span class="inventory-icon">▱</span><span><small>状态</small><strong id="status-count">—</strong></span></div>
+        </div>
+      </section>
+
+      <section class="panel run-panel" aria-labelledby="run-title">
+        <div class="panel-heading">
+          <div><span class="section-index">04 / RUN CONTEXT</span><h2 id="run-title">本局上下文</h2></div>
+          <span class="character-tag">IRONCLAD ONLY</span>
+        </div>
+        <div class="run-context" id="run-context">
+          <div><span>角色</span><strong>—</strong></div>
+          <div><span>层数</span><strong>—</strong></div>
+          <div><span>难度</span><strong>—</strong></div>
+          <div><span>状态指纹</span><strong class="mono fingerprint">—</strong></div>
+        </div>
+        <details class="legend-details">
+          <summary>动作分流规则</summary>
+          <ul>
+            <li><b class="kev-text">KEV</b>：有多个可行选项时判断战斗战术与药水</li>
+            <li><b class="luna-text">GPT-6 Luna</b>：规划路线、奖励选牌、商店与策略选择</li>
+            <li>已规划路线的唯一下一步、强制操作和单候选动作直接执行，不调用模型</li>
+            <li>只有合法动作被记录；网页不提供动作提交按钮</li>
+          </ul>
+        </details>
+      </section>
+    </div>
+
+    <footer class="footer"><span>LOCALHOST ONLY <i>·</i> READ-ONLY MONITOR</span><span>STS2 AGENT <b>0.1</b></span></footer>
+  </main>
+</body>
+</html>
