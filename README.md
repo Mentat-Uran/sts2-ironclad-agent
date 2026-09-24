@@ -38,6 +38,7 @@ uv run sts2-agent preflight --config config.toml
 - KEV 使用结构化判断接口 `/v1/systemone`，只可从当前合法动作候选中选择；不是聊天补全文本模型。
 - Luna 使用 OpenAI Chat Completions 兼容接口。`base_url` 应包含一次 `/v1`，客户端追加 `/chat/completions`。模型 ID 在配置中指定。
 - 将 Luna 凭据放在启动进程的环境变量 `STS2_LUNA_API_KEY` 中，或配置你自己的 SSH 密钥文件来源。SSH 方式只在你明确设置 `STS2_LUNA_KEY_SSH_TARGET` 与 `STS2_LUNA_KEY_REMOTE_PATH` 后启用；密钥只传给子进程，不写入项目文件或日志。
+- `run-agent.ps1` 会加载可选的本机忽略文件 `local.settings.ps1`。直接运行 `autoplay_mcp.py` 时，应先在 PowerShell 中 dot-source 该本机文件，或自行设置上述环境变量。
 - 没有 Luna 凭据时，Luna 专属策略决策会安全暂停；不会自动换成其它模型。KEV 和 Luna 的上下文相互隔离。
 
 项目样例默认使用本机回环地址。服务地址、模型可用性、认证方式和模型 ID 都需要由使用者按自己的服务配置。
