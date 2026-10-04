@@ -41,7 +41,7 @@ def _compact_line_context(source: Any) -> dict[str, Any]:
     payoff = source.get("setup_payoff_evidence")
     if isinstance(payoff, dict):
         context["setup_payoff_evidence"] = _present(payoff, (
-            "card_id", "card_name", "effects", "current_turn_attack_payoff_verified",
+            "card_id", "card_name", "card_type", "effects", "current_turn_attack_payoff_verified",
             "current_turn_hp_damage_without_setup", "current_turn_hp_damage_with_setup",
             "current_turn_incremental_hp_damage", "energy_spent_by_setup",
         ))
